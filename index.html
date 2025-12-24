@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<title>Suivi mondial de Noël</title>
+<title>Suivi magique de Noël</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
 html, body { margin:0; padding:0; width:100%; height:100%; background:#020924; overflow:hidden; font-family:Arial, sans-serif; }
@@ -14,7 +14,7 @@ html, body { margin:0; padding:0; width:100%; height:100%; background:#020924; o
 <body>
 
 <div class="overlay">
-  <h1>Suivi mondial de Noël</h1>
+  <h1>Suivi magique de Noël</h1>
   <div class="counter">Zones livrées : <span id="count">0</span></div>
 </div>
 
@@ -23,28 +23,28 @@ html, body { margin:0; padding:0; width:100%; height:100%; background:#020924; o
 <script src="https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.min.js"></script>
 
 <script>
-// ====== SCÈNE ======
+// ===== SCÈNE =====
 const container = document.getElementById("scene");
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x020924);
 
-// ====== CAMÉRA ======
+// ===== CAMÉRA =====
 const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 1000);
 camera.position.set(0, 0, 4);
 
-// ====== RENDERER ======
+// ===== RENDERER =====
 const renderer = new THREE.WebGLRenderer({ antialias:true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(window.devicePixelRatio);
 container.appendChild(renderer.domElement);
 
-// ====== LUMIÈRES ======
+// ===== LUMIÈRES =====
 scene.add(new THREE.AmbientLight(0xffffff,0.7));
 const sun = new THREE.DirectionalLight(0xffffff,1);
 sun.position.set(5,3,5);
 scene.add(sun);
 
-// ====== TERRE ======
+// ===== GLOBE TERRESTRE =====
 const loader = new THREE.TextureLoader();
 const earthMaterial = new THREE.MeshPhongMaterial({ color:0x2244ff });
 
@@ -56,13 +56,13 @@ loader.load(
 const earth = new THREE.Mesh(new THREE.SphereGeometry(1,64,64), earthMaterial);
 scene.add(earth);
 
-// ====== ATMOSPHÈRE ======
+// ===== ATMOSPHÈRE =====
 scene.add(new THREE.Mesh(
   new THREE.SphereGeometry(1.03,64,64),
   new THREE.MeshBasicMaterial({ color:0x66ccff, transparent:true, opacity:0.2 })
 ));
 
-// ====== VILLES ======
+// ===== VILLES =====
 const cities = [
   {name:"Paris", lat:48.8, lon:2.3},
   {name:"New York", lat:40.7, lon:-74},
@@ -96,14 +96,11 @@ cities.forEach(c=>{
   scene.add(m);
 });
 
-// ====== TRAÎNEAU + RENNES ======
+// ===== TRAÎNEAU + RENNES =====
 const sleighGroup = new THREE.Group();
-
 function box(w,h,d,c){ return new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshStandardMaterial({color:c})); }
-
 const sleigh = box(0.12,0.05,0.05,0xff0000);
 sleighGroup.add(sleigh);
-
 const deerList = [];
 for(let i=0;i<3;i++){
   const deer = box(0.04,0.03,0.02,0xdddddd);
@@ -113,60 +110,73 @@ for(let i=0;i<3;i++){
 }
 scene.add(sleighGroup);
 
-// ====== TRAÎNÉE LUMINEUSE DYNAMIQUE ======
+// ===== TRAÎNÉE LUMINEUSE DYNAMIQUE =====
 const trailPoints = [];
-const maxTrail = 100;
+const maxTrail = 150;
 const trailMaterial = new THREE.LineBasicMaterial({ color:0x00ffff, transparent:true, opacity:0.6 });
 const trailGeometry = new THREE.BufferGeometry();
 const trailLine = new THREE.Line(trailGeometry, trailMaterial);
 scene.add(trailLine);
 
-// ====== ANIMATION ======
-let angle = 0;
+// ===== CHEMIN PRÉDÉFINI DES VILLES =====
+let pathIndex = 0;
+const pathPoints = cities.map(c=>latLonToVec(c.lat,c.lon,1.2));
+
+// ===== ANIMATION =====
+let step = 0;
 function animate(){
   requestAnimationFrame(animate);
 
   earth.rotation.y+=0.001;
-  angle+=0.003;
 
-  const r = 1.4;
-  // Traîneau position
-  const x = Math.cos(angle)*r;
-  const y = Math.sin(angle*0.5)*0.2;
-  const z = Math.sin(angle)*r;
-  sleighGroup.position.set(x,y,z);
+  // Traîneau suit le chemin
+  const current = pathPoints[pathIndex];
+  const next = pathPoints[(pathIndex+1)%pathPoints.length];
+  const t = (step%100)/100;
+  const pos = current.clone().lerp(next,t);
+  sleighGroup.position.copy(pos);
   sleighGroup.lookAt(earth.position);
 
   // Rennes saut
   deerList.forEach((d,i)=>{
-    d.position.y = 0.02*Math.sin(angle*10 + i);
+    d.position.y = 0.02*Math.sin(step*0.3 + i);
   });
 
+  // Glow du traîneau
+  const glow = new THREE.PointLight(0x00ffff,0.8,0.5);
+  glow.position.copy(sleighGroup.position);
+  scene.add(glow);
+  if(step%10===0) scene.remove(glow);
+
   // Traînée
-  trailPoints.push(new THREE.Vector3(x,y,z));
+  trailPoints.push(pos.clone());
   if(trailPoints.length>maxTrail) trailPoints.shift();
   trailGeometry.setFromPoints(trailPoints);
 
-  // Villes animées
+  // Vérification livraison villes et scintillement
   cityMeshes.forEach(m=>{
-    if(!m.userData.delivered && m.position.distanceTo(sleighGroup.position)<0.2){
+    if(!m.userData.delivered && m.position.distanceTo(sleighGroup.position)<0.15){
       m.userData.delivered=true;
       delivered++;
     }
-    if(m.userData.delivered && m.userData.intensity<1){
-      m.userData.intensity+=0.02;
-      m.material.color.setRGB(1,1,0).lerp(new THREE.Color(1,1,0),m.userData.intensity);
+    if(m.userData.delivered){
+      const glowIntensity = 0.5 + 0.5*Math.sin(step*0.1);
+      m.material.color.setRGB(glowIntensity, glowIntensity,0);
     }
   });
 
   counter.textContent = delivered;
+
+  // Avancement chemin
+  if(step%100===0) pathIndex=(pathIndex+1)%pathPoints.length;
+  step++;
 
   renderer.render(scene,camera);
 }
 
 animate();
 
-// ====== RESIZE ======
+// ===== RESIZE =====
 window.addEventListener("resize",()=>{
   camera.aspect=window.innerWidth/window.innerHeight;
   camera.updateProjectionMatrix();
